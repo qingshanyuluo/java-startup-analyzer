@@ -1,0 +1,14 @@
+# Java Startup Analyzer 配置文件示例
+
+# LLM配置
+model: "openai"  # 支持的模型: openai, anthropic
+api_key: "your-api-key-here"  # 您的API密钥
+base_url: ""  # 可选，自定义API端点
+
+# 必需配置
+start_cmd: "java -jar myapp.jar"  # Java启动命令
+log_path: "/path/to/application.log"  # 日志文件路径
+
+# 可选配置
+git_repo: "/path/to/git/repository"  # Git仓库路径（可选）
+verbose: false  # 详细输出模式

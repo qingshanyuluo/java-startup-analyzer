@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Chat Mode",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "chat",
+                "--config",
+                "test-config.yaml",
+                "--verbose"
+            ],
+            "env": {
+                "DEBUG": "true",
+                "DEBUG_PROFILER": "true",
+                "DEBUG_PROFILER_PORT": "6060"
+            },
+            "console": "integratedTerminal",
+            "showLog": true
+        }
+    ]
+}

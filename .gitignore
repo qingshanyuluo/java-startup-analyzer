@@ -1,0 +1,33 @@
+# 敏感配置文件
+test-config.yaml
+config.yaml
+.java-analyzer.yaml
+
+# 构建产物
+java-analyzer
+java-analyzer-*
+build/
+dist/
+
+# 调试文件
+__debug_bin*
+*.log
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# Go 相关
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out

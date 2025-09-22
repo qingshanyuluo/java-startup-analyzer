@@ -1,0 +1,30 @@
+2024-01-15 10:30:15.123 INFO  --- [main] com.example.Application : Starting Application using Java 11.0.16 on hostname with PID 12345
+2024-01-15 10:30:15.125 INFO  --- [main] com.example.Application : No active profile set, falling back to default profiles: default
+2024-01-15 10:30:15.200 INFO  --- [main] o.s.b.w.embedded.tomcat.TomcatWebServer : Tomcat initialized with port(s): 8080 (http)
+2024-01-15 10:30:15.201 INFO  --- [main] o.apache.catalina.core.StandardService : Starting service [Tomcat]
+2024-01-15 10:30:15.202 INFO  --- [main] org.apache.catalina.core.StandardEngine : Starting Servlet engine: [Apache Tomcat/9.0.65]
+2024-01-15 10:30:15.250 INFO  --- [main] o.a.c.c.C.[Tomcat].[localhost].[/] : Initializing Spring embedded WebApplicationContext
+2024-01-15 10:30:15.251 INFO  --- [main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 50 ms
+2024-01-15 10:30:15.300 ERROR --- [main] o.s.b.SpringApplication : Application run failed
+
+java.lang.ClassNotFoundException: com.example.service.UserService
+	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:581)
+	at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:178)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:522)
+	at org.springframework.context.annotation.ConfigurationClassEnhancer$BeanMethodInterceptor.intercept(ConfigurationClassEnhancer.java:331)
+	at com.example.config.AppConfig$$EnhancerBySpringCGLIB$$12345678.userService(<generated>)
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.getBean(DefaultListableBeanFactory.java:365)
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.getBean(DefaultListableBeanFactory.java:332)
+	at org.springframework.context.support.AbstractApplicationContext.getBean(AbstractApplicationContext.java:1123)
+	at com.example.Application.main(Application.java:25)
+
+Caused by: java.lang.ClassNotFoundException: com.example.service.UserService
+	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:581)
+	at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:178)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:522)
+	... 8 more
+
+2024-01-15 10:30:15.301 ERROR --- [main] com.example.Application : Application startup failed
+2024-01-15 10:30:15.302 INFO  --- [main] o.s.b.a.l.ConditionEvaluationReportLoggingListener : 
+
+Error starting ApplicationContext. To display the conditions report re-run your application with 'debug' enabled.
