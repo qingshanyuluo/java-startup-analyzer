@@ -1,9 +1,12 @@
 package llm
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
 )
 
 // Client LLM客户端
@@ -47,7 +50,21 @@ func (c *Client) GetChatModel() model.ChatModel {
 	return c.model
 }
 
+// BindTools 绑定工具到模型
+func (c *Client) BindTools(tools []*schema.ToolInfo) error {
+	return c.model.BindTools(tools)
+}
+
 // createOpenAIModel 创建OpenAI模型
 func createOpenAIModel(modelName, apiKey, baseURL string) (model.ChatModel, error) {
-	return NewOpenAIModel(modelName, apiKey, baseURL)
+	// 使用 Eino 官方的 OpenAI 实现
+	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
+		BaseURL: baseURL,
+		Model:   modelName,
+		APIKey:  apiKey,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("创建 OpenAI 模型失败: %w", err)
+	}
+	return chatModel, nil
 }

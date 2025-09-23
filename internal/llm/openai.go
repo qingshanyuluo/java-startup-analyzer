@@ -56,6 +56,21 @@ func (m *OpenAIModel) Generate(ctx context.Context, input []*schema.Message, opt
 		Messages: messages,
 	}
 
+	// 添加工具支持
+	if len(m.tools) > 0 {
+		req.Tools = make([]openai.Tool, len(m.tools))
+		for i, tool := range m.tools {
+			req.Tools[i] = openai.Tool{
+				Type: openai.ToolTypeFunction,
+				Function: &openai.FunctionDefinition{
+					Name:        tool.Name,
+					Description: tool.Desc,
+					Parameters:  tool.ParamsOneOf,
+				},
+			}
+		}
+	}
+
 	resp, err := m.client.CreateChatCompletion(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chat completion: %w", err)

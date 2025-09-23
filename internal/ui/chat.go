@@ -623,17 +623,17 @@ func (m ChatModel) processJavaLog(input string) tea.Cmd {
 
 func (m ChatModel) autoAnalyze() tea.Cmd {
 	return func() tea.Msg {
-		// 读取日志文件内容
-		logContent, err := m.readLogFile()
+		// 获取日志文件路径
+		logPath, err := m.getLogFilePath()
 		if err != nil {
 			return AnalysisCompleteMsg{
-				Error: fmt.Errorf("读取日志文件失败: %w", err),
+				Error: fmt.Errorf("获取日志文件路径失败: %w", err),
 			}
 		}
 
-		// 使用流式调用分析器
+		// 使用流式调用分析器，传递文件路径让大模型自己使用工具读取
 		ctx := context.Background()
-		streamReader, err := m.analyzer.ChatStream(ctx, map[string]any{"log_content": logContent})
+		streamReader, err := m.analyzer.ChatStream(ctx, map[string]any{"log_path": logPath})
 		if err != nil {
 			return AnalysisCompleteMsg{
 				Error: err,
@@ -643,6 +643,14 @@ func (m ChatModel) autoAnalyze() tea.Cmd {
 		// 启动流式处理
 		return StartStreamMsg{StreamReader: streamReader, isFirst: true}
 	}
+}
+
+func (m ChatModel) getLogFilePath() (string, error) {
+	// 返回日志文件路径，让大模型自己使用工具读取
+	if m.config.LogPath == "" {
+		return "", fmt.Errorf("日志文件路径未配置")
+	}
+	return m.config.LogPath, nil
 }
 
 func (m ChatModel) readLogFile() (string, error) {
