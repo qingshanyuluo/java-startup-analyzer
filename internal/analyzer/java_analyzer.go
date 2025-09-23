@@ -82,8 +82,16 @@ func (ja *JavaAnalyzer) Chat(ctx context.Context, input map[string]any) (*schema
 	// 将用户消息添加到对话历史
 	ja.messages = append(ja.messages, userMessage)
 
+	// 创建包含系统消息的完整消息列表
+	messagesWithSystem := make([]*schema.Message, 0, len(ja.messages)+1)
+	messagesWithSystem = append(messagesWithSystem, &schema.Message{
+		Role:    schema.System,
+		Content: systemPrompt,
+	})
+	messagesWithSystem = append(messagesWithSystem, ja.messages...)
+
 	// 使用完整的对话历史调用 agent
-	response, err := ja.agent.Generate(ctx, ja.messages)
+	response, err := ja.agent.Generate(ctx, messagesWithSystem)
 	if err != nil {
 		return nil, err
 	}
@@ -127,8 +135,16 @@ func (ja *JavaAnalyzer) ChatStream(ctx context.Context, input map[string]any) (*
 	// 将用户消息添加到对话历史
 	ja.messages = append(ja.messages, userMessage)
 
+	// 创建包含系统消息的完整消息列表
+	messagesWithSystem := make([]*schema.Message, 0, len(ja.messages)+1)
+	messagesWithSystem = append(messagesWithSystem, &schema.Message{
+		Role:    schema.System,
+		Content: systemPrompt,
+	})
+	messagesWithSystem = append(messagesWithSystem, ja.messages...)
+
 	// 使用完整的对话历史调用 agent
-	streamReader, err := ja.agent.Stream(ctx, ja.messages)
+	streamReader, err := ja.agent.Stream(ctx, messagesWithSystem)
 	if err != nil {
 		return nil, err
 	}
@@ -148,10 +164,8 @@ func (ja *JavaAnalyzer) AddAssistantMessage(content string) {
 	ja.messages = append(ja.messages, assistantMessage)
 }
 
-// createAnalysisAgent 创建分析代理
-func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
-	// 创建系统提示模板
-	systemPrompt := `你是一个专业的Java应用程序启动问题诊断专家。你的任务是分析Java应用程序的启动日志，识别启动失败的原因并提供专业的解决建议。
+// 系统提示模板
+const systemPrompt = `你是一个专业的Java应用程序启动问题诊断专家。你的任务是分析Java应用程序的启动日志，识别启动失败的原因并提供专业的解决建议。
 
 你可以使用以下工具：
 - read_file: 读取指定文件的内容，支持分页读取大文件和反向读取
@@ -234,10 +248,11 @@ func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
 - 分析必须全面，不能遗漏任何可能的错误模式
 - 重点关注启动完成时的错误和启动失败的相关信息`
 
+// createAnalysisAgent 创建分析代理
+func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
 	// 创建代理配置
 	config := &react.AgentConfig{
 		ToolCallingModel: llmClient.GetChatModel().(model.ToolCallingChatModel),
-		MessageModifier:  react.NewPersonaModifier(systemPrompt),
 		ToolsConfig: compose.ToolsNodeConfig{
 			Tools: []tool.BaseTool{
 				tools.ReadFileTool,
