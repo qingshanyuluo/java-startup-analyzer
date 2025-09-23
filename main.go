@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"os"
 	"strings"
 
+	"github.com/cloudwego/eino-ext/devops"
 	"github.com/user/java-startup-analyzer/cmd"
 	"github.com/user/java-startup-analyzer/internal/debug"
 )
@@ -44,6 +46,16 @@ func initDebug() {
 
 			debug.Info("性能分析器已启动: http://localhost:%s", port)
 		}
+
+		ctx := context.Background()
+
+		// 1.调用调试服务初始化函数
+		err := devops.Init(ctx)
+		if err != nil {
+			debug.Error("[eino dev] init failed, err=%v", err)
+			return
+		}
+
 	}
 
 	// 检查是否启用详细模式

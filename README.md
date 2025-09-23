@@ -65,6 +65,27 @@ verbose: false  # 详细输出模式
 - OpenAI GPT
 - 其他兼容OpenAI API的模型
 
+## VS Code调试配置说明
+1. Debug Chat Mode (原始配置)
+显示所有调试信息
+包含性能分析器
+适合需要详细调试信息的情况
+2. Debug Chat Mode (Silent) ⭐ 推荐用于减少输出
+设置 DEBUG_LEVEL=error - 只显示错误
+设置 SILENT_DEBUG=true - 静默调试模式
+设置 showLog: false - 不显示调试器日志
+这是您需要的配置，可以大幅减少控制台输出
+3. Debug Analyze Mode
+用于调试分析功能
+显示INFO级别及以上的日志
+4. Debug Analyze Mode (Silent)
+静默模式的分析调试
+只显示错误信息
+5. Debug with Profiler
+包含性能分析器
+设置WARN级别，减少输出但保留重要信息
+
+
 ## 许可证
 
 MIT License

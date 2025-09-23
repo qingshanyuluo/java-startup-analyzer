@@ -155,4 +155,9 @@ func init() {
 	} else if os.Getenv("DEBUG") == "true" {
 		SetLevel(DEBUG)
 	}
+
+	// 如果设置了 SILENT_DEBUG，则禁用所有调试输出
+	if os.Getenv("SILENT_DEBUG") == "true" {
+		SetLevel(ERROR) // 只显示错误信息
+	}
 }

@@ -20,6 +20,86 @@
             },
             "console": "integratedTerminal",
             "showLog": true
+        },
+        {
+            "name": "Debug Chat Mode (Silent)",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "chat",
+                "--config",
+                "test-config.yaml",
+                "--verbose"
+            ],
+            "env": {
+                "DEBUG": "true",
+                "DEBUG_LEVEL": "error",
+                "SILENT_DEBUG": "true"
+            },
+            "console": "integratedTerminal",
+            "showLog": false
+        },
+        {
+            "name": "Debug Analyze Mode",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "analyze",
+                "-f",
+                "examples/sample-java-error.log",
+                "--verbose"
+            ],
+            "env": {
+                "DEBUG": "true",
+                "DEBUG_LEVEL": "info"
+            },
+            "console": "integratedTerminal",
+            "showLog": true
+        },
+        {
+            "name": "Debug Analyze Mode (Silent)",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "analyze",
+                "-f",
+                "examples/sample-java-error.log",
+                "--verbose"
+            ],
+            "env": {
+                "DEBUG": "true",
+                "DEBUG_LEVEL": "error",
+                "SILENT_DEBUG": "true"
+            },
+            "console": "integratedTerminal",
+            "showLog": false
+        },
+        {
+            "name": "Debug with Profiler",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "args": [
+                "chat",
+                "--config",
+                "test-config.yaml",
+                "--verbose"
+            ],
+            "env": {
+                "DEBUG": "true",
+                "DEBUG_PROFILER": "true",
+                "DEBUG_PROFILER_PORT": "6060",
+                "DEBUG_LEVEL": "warn"
+            },
+            "console": "integratedTerminal",
+            "showLog": true
         }
     ]
 }
