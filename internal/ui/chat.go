@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 	"unicode"
@@ -299,10 +298,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMsg:
 		// 允许使用鼠标滚轮
-		if msg.Type == tea.MouseWheelUp {
-			m.viewport.LineUp(1)
-		} else if msg.Type == tea.MouseWheelDown {
-			m.viewport.LineDown(1)
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonWheelUp {
+			m.viewport.ScrollUp(1)
+		} else if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonWheelDown {
+			m.viewport.ScrollDown(1)
 		}
 
 	case processingTickMsg:
@@ -653,13 +652,4 @@ func (m ChatModel) getLogFilePath() (string, error) {
 		return "", fmt.Errorf("日志文件路径未配置")
 	}
 	return m.config.LogPath, nil
-}
-
-func (m ChatModel) readLogFile() (string, error) {
-	// 读取日志文件
-	content, err := os.ReadFile(m.config.LogPath)
-	if err != nil {
-		return "", err
-	}
-	return string(content), nil
 }
