@@ -8,7 +8,7 @@ import (
 
 // Client LLM客户端
 type Client struct {
-	model     model.BaseChatModel
+	model     model.ChatModel
 	modelType string
 	modelName string
 	apiKey    string
@@ -43,11 +43,11 @@ func NewClient(modelType, modelName, apiKey, baseURL string) (*Client, error) {
 }
 
 // GetChatModel 获取聊天模型
-func (c *Client) GetChatModel() model.BaseChatModel {
+func (c *Client) GetChatModel() model.ChatModel {
 	return c.model
 }
 
 // createOpenAIModel 创建OpenAI模型
-func createOpenAIModel(modelName, apiKey, baseURL string) (model.BaseChatModel, error) {
+func createOpenAIModel(modelName, apiKey, baseURL string) (model.ChatModel, error) {
 	return NewOpenAIModel(modelName, apiKey, baseURL)
 }

@@ -8,13 +8,11 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.4
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/cloudwego/eino v0.0.0
+	github.com/cloudwego/eino v0.5.3
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 )
-
-replace github.com/cloudwego/eino => ../eino
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

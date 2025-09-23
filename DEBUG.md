@@ -250,7 +250,8 @@ func BenchmarkAnalyze(b *testing.B) {
     
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        analyzer.Analyze(logContent)
+        // 注意：Analyze 方法已被移除，现在使用 Chat 或 ChatStream 方法
+        // analyzer.Chat(ctx, map[string]any{"log_content": logContent})
     }
 }
 ```

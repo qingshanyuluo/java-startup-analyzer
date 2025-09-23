@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/cloudwego/eino/schema"
 	"github.com/user/java-startup-analyzer/internal/analyzer"
-	"github.com/user/java-startup-analyzer/internal/llm"
 )
 
 // Message 表示聊天中的一条消息
@@ -37,10 +37,11 @@ type ChatModel struct {
 	ctrlCPressed   bool // 跟踪是否已经按了一次Ctrl+C
 	wasInterrupted bool // 跟踪是否被Ctrl+C打断
 	ready          bool
-	streamingMsg   string // 当前流式输出的消息内容
-	typingFull     string // 打字机效果的完整文本
-	typingPos      int    // 当前已输出的位置（按rune计）
-	isFirst        bool   // 是否是第一次分析
+	streamingMsg   string                                // 当前流式输出的消息内容
+	typingFull     string                                // 打字机效果的完整文本
+	typingPos      int                                   // 当前已输出的位置（按rune计）
+	isFirst        bool                                  // 是否是第一次分析
+	streamReader   *schema.StreamReader[*schema.Message] // 流式读取器
 }
 
 // AnalysisCompleteMsg 分析完成的消息
@@ -66,6 +67,13 @@ type StartTypingMsg struct {
 	Content string
 	isFirst bool
 }
+
+// StartStreamMsg 启动真正的流式处理
+type StartStreamMsg struct {
+	StreamReader *schema.StreamReader[*schema.Message]
+	isFirst      bool
+}
+
 type analysisDoneMsg struct{}
 
 // NewChatModel 创建新的聊天模型
@@ -125,6 +133,14 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isFirst = msg.isFirst
 		// 立即开始第一次输出
 		return m, tea.Tick(20*time.Millisecond, func(t time.Time) tea.Msg { return typingTickMsg(t) })
+
+	case StartStreamMsg:
+		// 启动真正的流式处理
+		m.streamingMsg = ""
+		m.isFirst = msg.isFirst
+		m.streamReader = msg.StreamReader
+		// 启动流式读取
+		return m, m.startStreaming(msg.StreamReader)
 
 	case tea.KeyMsg:
 		// 检查是否是Ctrl+C，如果是则允许打断处理
@@ -265,9 +281,16 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 				m.streamingMsg = ""
 			}
+			if m.isFirst {
+				return m, func() tea.Msg {
+					return analysisDoneMsg{}
+				}
+			}
 		} else {
 			// 更新流式输出内容
 			m.streamingMsg += msg.Content
+			// 继续读取下一个流式数据块
+			return m, m.continueStreaming()
 		}
 		m.viewport.SetContent(m.renderMessages())
 		m.viewport.GotoBottom()
@@ -454,6 +477,48 @@ func (m *ChatModel) updateProcessingText() tea.Cmd {
 	})
 }
 
+// startStreaming 启动真正的流式处理
+func (m *ChatModel) startStreaming(streamReader *schema.StreamReader[*schema.Message]) tea.Cmd {
+	return func() tea.Msg {
+		// 读取流式数据
+		message, err := streamReader.Recv()
+		if err != nil {
+			if err == io.EOF {
+				// 流式输出完成
+				return StreamMsg{Done: true}
+			}
+			// 发生错误
+			return StreamMsg{Error: err, Done: true}
+		}
+
+		// 返回流式内容
+		return StreamMsg{Content: message.Content, Done: false}
+	}
+}
+
+// continueStreaming 继续流式处理
+func (m *ChatModel) continueStreaming() tea.Cmd {
+	return func() tea.Msg {
+		if m.streamReader == nil {
+			return StreamMsg{Error: fmt.Errorf("stream reader is nil"), Done: true}
+		}
+
+		// 读取下一个流式数据块
+		message, err := m.streamReader.Recv()
+		if err != nil {
+			if err == io.EOF {
+				// 流式输出完成
+				return StreamMsg{Done: true}
+			}
+			// 发生错误
+			return StreamMsg{Error: err, Done: true}
+		}
+
+		// 返回流式内容
+		return StreamMsg{Content: message.Content, Done: false}
+	}
+}
+
 func (m ChatModel) renderMessages() string {
 	var s strings.Builder
 	for _, msg := range m.messages {
@@ -544,37 +609,15 @@ func isValidInput(s string) bool {
 
 func (m ChatModel) processJavaLog(input string) tea.Cmd {
 	return func() tea.Msg {
-		// 创建LLM客户端
-		llmClient, err := llm.NewClient(m.config.Model, m.config.ModelName, m.config.APIKey, m.config.BaseURL)
-		if err != nil {
-			return StreamMsg{Error: err, Done: true}
-		}
-
 		// 构建消息
-		messages := []*schema.Message{
-			{
-				Role:    schema.System,
-				Content: "你是一个Java启动问题分析专家。请简洁明了地回答用户关于Java启动问题的询问。",
-			},
-			{
-				Role:    schema.User,
-				Content: input,
-			},
-		}
-
-		// 调用LLM生成响应
 		ctx := context.Background()
-		response, err := llmClient.GetChatModel().Generate(ctx, messages)
+		streamReader, err := m.analyzer.ChatStream(ctx, map[string]any{"input": input})
 		if err != nil {
 			return StreamMsg{Error: err, Done: true}
 		}
 
-		// 返回并启动打字机效果
-		content := response.Content
-		if content == "" {
-			content = "抱歉，我无法理解您的问题。请提供更多详细信息。"
-		}
-		return StartTypingMsg{Content: content, isFirst: false}
+		// 启动真正的流式处理
+		return StartStreamMsg{StreamReader: streamReader, isFirst: false}
 	}
 }
 
@@ -588,16 +631,17 @@ func (m ChatModel) autoAnalyze() tea.Cmd {
 			}
 		}
 
-		// 调用分析器
-		result, err := m.analyzer.Analyze(logContent)
+		// 使用流式调用分析器
+		ctx := context.Background()
+		streamReader, err := m.analyzer.ChatStream(ctx, map[string]any{"log_content": logContent})
 		if err != nil {
 			return AnalysisCompleteMsg{
 				Error: err,
 			}
 		}
 
-		// 只返回简洁的摘要，作为背景信息
-		return StartTypingMsg{Content: result.Summary, isFirst: true}
+		// 启动流式处理
+		return StartStreamMsg{StreamReader: streamReader, isFirst: true}
 	}
 }
 

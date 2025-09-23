@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
@@ -13,6 +14,7 @@ import (
 type OpenAIModel struct {
 	client    *openai.Client
 	modelName string
+	tools     []*schema.ToolInfo
 }
 
 // NewOpenAIModel creates a new OpenAIModel.
@@ -35,6 +37,7 @@ func NewOpenAIModel(modelName, apiKey, baseURL string) (*OpenAIModel, error) {
 	return &OpenAIModel{
 		client:    client,
 		modelName: modelName,
+		tools:     []*schema.ToolInfo{},
 	}, nil
 }
 
@@ -69,7 +72,75 @@ func (m *OpenAIModel) Generate(ctx context.Context, input []*schema.Message, opt
 	}, nil
 }
 
-// Stream is not yet implemented.
+// Stream implements streaming chat completion using the OpenAI API.
 func (m *OpenAIModel) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
-	return nil, fmt.Errorf("streaming is not yet implemented for the OpenAI model")
+	messages := make([]openai.ChatCompletionMessage, len(input))
+	for i, msg := range input {
+		messages[i] = openai.ChatCompletionMessage{
+			Role:    string(msg.Role),
+			Content: msg.Content,
+		}
+	}
+
+	req := openai.ChatCompletionRequest{
+		Model:    m.modelName,
+		Messages: messages,
+		Stream:   true,
+	}
+
+	stream, err := m.client.CreateChatCompletionStream(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chat completion stream: %w", err)
+	}
+
+	// 创建StreamReader和StreamWriter
+	reader, writer := schema.Pipe[*schema.Message](10)
+
+	// 启动goroutine处理流式响应
+	go func() {
+		defer writer.Close()
+		for {
+			response, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				// 发送错误到流
+				writer.Send(nil, fmt.Errorf("failed to receive stream response: %w", err))
+				return
+			}
+
+			if len(response.Choices) == 0 {
+				// 流式响应的最后一个chunk可能没有choices，这是正常的
+				continue
+			}
+
+			choice := response.Choices[0]
+
+			// 检查是否有内容需要发送
+			if choice.Delta.Content == "" && choice.Delta.Role == "" {
+				// 空的delta，跳过
+				continue
+			}
+
+			message := &schema.Message{
+				Role:    schema.RoleType(choice.Delta.Role),
+				Content: choice.Delta.Content,
+			}
+
+			// 发送消息到流
+			closed := writer.Send(message, nil)
+			if closed {
+				break
+			}
+		}
+	}()
+
+	return reader, nil
+}
+
+// BindTools binds tools to the model.
+func (m *OpenAIModel) BindTools(tools []*schema.ToolInfo) error {
+	m.tools = tools
+	return nil
 }
