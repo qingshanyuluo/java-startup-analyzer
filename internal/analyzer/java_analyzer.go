@@ -154,12 +154,64 @@ func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
 	systemPrompt := `你是一个专业的Java应用程序启动问题诊断专家。你的任务是分析Java应用程序的启动日志，识别启动失败的原因并提供专业的解决建议。
 
 你可以使用以下工具：
-- tail: 读取日志文件的最后N行内容
+- read_file: 读取指定文件的内容，支持分页读取大文件和反向读取
+- search_file_content: 在目录中搜索正则表达式模式，用于查找特定的错误信息或配置问题
 
-分析流程：
-1. 当用户提供日志文件路径时，使用tail工具读取日志内容
+## 工具使用最佳实践：
+
+### 1. 初始日志分析（推荐方式）
+- 首先使用：reverse=true, limit=100
+- 这会读取日志文件的最后100行，通常包含最新的错误信息
+- 示例：{"absolute_path": "/path/to/log", "reverse": true, "limit": 100}
+
+### 2. 分页读取策略
+- 如果需要更多内容，使用offset参数继续读取
+- 反向读取：reverse=true, offset=100, limit=100 （读取倒数第101-200行）
+- 正向读取：offset=0, limit=100 （读取前100行）
+
+### 3. 搜索工具使用策略
+- 当多次读取日志后仍未找到明确错误原因时，使用search_file_content工具
+- 搜索常见的Java错误模式：
+  - "Exception" - 查找所有异常
+  - "Error" - 查找所有错误
+  - "OutOfMemoryError" - 内存不足错误
+  - "ClassNotFoundException" - 类未找到错误
+  - "NoSuchMethodError" - 方法未找到错误
+  - "Connection refused" - 连接被拒绝
+  - "Port.*already in use" - 端口被占用
+  - "Configuration.*error" - 配置错误
+  - "finish.*error" - 启动完成时的错误
+  - "startup.*failed" - 启动失败
+  - "application.*failed" - 应用启动失败
+  - "failed.*to.*start" - 启动失败
+  - "shutdown.*error" - 关闭错误
+  - "timeout" - 超时错误
+  - "deadlock" - 死锁
+- 示例：{"pattern": "finish.*error", "include": "*.log"}
+
+### 4. 参数说明
+- read_file工具：
+  - absolute_path: 必须提供绝对路径
+  - reverse: true=从末尾开始读取（推荐用于日志分析）
+  - limit: 建议初始使用100行，避免一次性读取过多内容
+  - offset: 0-based行号，reverse=true时从末尾计算
+- search_file_content工具：
+  - pattern: 正则表达式模式（必需）
+  - path: 搜索目录路径（可选，默认为当前目录）
+  - include: 文件过滤模式（可选，如"*.log", "*.java"）
+
+## 分析流程：
+1. 当用户提供日志文件路径时，立即使用read_file工具读取最后100行（必须至少查看100行）
 2. 分析日志中的错误信息、异常堆栈和警告
-3. 识别常见的Java启动问题，如：
+3. 如果100行不够，根据分析结果决定是否需要读取更多内容（最多200行）
+4. 如果多次读取后仍未找到明确原因，使用search_file_content工具搜索相关错误模式
+5. 必须进行关键词搜索，包括但不限于：
+   - "finish.*error" - 启动完成时的错误
+   - "Exception" - 所有异常
+   - "Error" - 所有错误
+   - "failed.*to.*start" - 启动失败
+   - "startup.*failed" - 启动失败
+6. 识别常见的Java启动问题，如：
    - OutOfMemoryError (内存不足)
    - ClassNotFoundException (类未找到)
    - NoSuchMethodError (方法未找到)
@@ -167,9 +219,20 @@ func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
    - Port already in use (端口被占用)
    - 配置错误
    - 依赖问题
-4. 提供详细的诊断结果和具体的解决方案
+   - 启动完成时的错误
+   - 超时问题
+   - 死锁问题
+7. 提供详细的诊断结果和具体的解决方案
 
-请始终使用tail工具来读取日志文件，不要要求用户直接提供日志内容。`
+## 重要提醒：
+- 始终使用read_file工具来读取日志文件，不要要求用户直接提供日志内容
+- 必须至少查看最后100行，优先使用reverse=true读取最后100行，因为错误通常出现在日志末尾
+- 如果文件很大，分页读取而不是一次性读取全部内容（最多200行）
+- 当多次读取后仍未找到问题根源时，必须使用search_file_content工具进行深度搜索
+- 必须搜索"finish.*error"等关键词，进行全面分析
+- 搜索工具可以帮助找到分散在多个文件中的相关错误信息
+- 分析必须全面，不能遗漏任何可能的错误模式
+- 重点关注启动完成时的错误和启动失败的相关信息`
 
 	// 创建代理配置
 	config := &react.AgentConfig{
@@ -177,7 +240,8 @@ func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
 		MessageModifier:  react.NewPersonaModifier(systemPrompt),
 		ToolsConfig: compose.ToolsNodeConfig{
 			Tools: []tool.BaseTool{
-				tools.TailTool,
+				tools.ReadFileTool,
+				tools.SearchFileContentTool,
 			},
 		},
 	}

@@ -30,13 +30,22 @@ func DefaultConfig() *Config {
 // Validate 验证配置
 func (c *Config) Validate() error {
 	if c.APIKey == "" {
-		return fmt.Errorf("API密钥不能为空")
+		return fmt.Errorf("api密钥不能为空")
 	}
 	if c.StartCmd == "" {
 		return fmt.Errorf("启动命令不能为空")
 	}
 	if c.LogPath == "" {
 		return fmt.Errorf("日志路径不能为空")
+	}
+
+	// 将相对路径转换为绝对路径
+	if !filepath.IsAbs(c.LogPath) {
+		absLogPath, err := filepath.Abs(c.LogPath)
+		if err != nil {
+			return fmt.Errorf("无法解析日志文件路径: %w", err)
+		}
+		c.LogPath = absLogPath
 	}
 
 	// 检查日志文件是否存在
@@ -46,9 +55,18 @@ func (c *Config) Validate() error {
 
 	// 如果指定了Git仓库，检查是否存在
 	if c.GitRepo != "" {
+		// 将Git仓库相对路径转换为绝对路径
+		if !filepath.IsAbs(c.GitRepo) {
+			absGitPath, err := filepath.Abs(c.GitRepo)
+			if err != nil {
+				return fmt.Errorf("无法解析git仓库路径: %w", err)
+			}
+			c.GitRepo = absGitPath
+		}
+
 		gitPath := filepath.Join(c.GitRepo, ".git")
 		if _, err := os.Stat(gitPath); os.IsNotExist(err) {
-			return fmt.Errorf("Git仓库不存在: %s", c.GitRepo)
+			return fmt.Errorf("git仓库不存在: %s", c.GitRepo)
 		}
 	}
 
