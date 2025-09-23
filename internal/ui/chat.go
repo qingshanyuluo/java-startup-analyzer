@@ -73,7 +73,7 @@ type StartStreamMsg struct {
 	isFirst      bool
 }
 
-type analysisDoneMsg struct{}
+// 移除analysisDoneMsg类型定义 - 不再需要
 
 // NewChatModel 创建新的聊天模型
 func NewChatModel(config *analyzer.Config) (*ChatModel, error) {
@@ -282,11 +282,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.analyzer.AddAssistantMessage(m.streamingMsg)
 				m.streamingMsg = ""
 			}
-			if m.isFirst {
-				return m, func() tea.Msg {
-					return analysisDoneMsg{}
-				}
-			}
+			// 移除第一次分析完成后的额外消息
 		} else {
 			// 更新流式输出内容
 			m.streamingMsg += msg.Content
@@ -333,11 +329,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.typingPos = 0
 			m.viewport.SetContent(m.renderMessages())
 			m.viewport.GotoBottom()
-			if m.isFirst {
-				return m, func() tea.Msg {
-					return analysisDoneMsg{}
-				}
-			}
+			// 移除第一次分析完成后的额外消息
 			m.isProcessing = false
 			return m, nil
 		}
@@ -353,17 +345,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 		// 安排下一次tick
 		return m, tea.Tick(20*time.Millisecond, func(t time.Time) tea.Msg { return typingTickMsg(t) })
-	case analysisDoneMsg:
-		m.isProcessing = false
-		m.wasInterrupted = false
-		m.messages = append(m.messages, Message{
-			Content: "✅ 背景分析完成！现在您可以开始聊天了。",
-			Sender:  "bot",
-			Time:    time.Now(),
-			Type:    "text",
-		})
-		m.viewport.SetContent(m.renderMessages())
-		m.viewport.GotoBottom()
+	// 移除analysisDoneMsg处理逻辑 - 不再显示额外的完成消息
 	default:
 		// 处理其他消息
 		if m.isProcessing {
