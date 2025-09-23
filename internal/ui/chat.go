@@ -279,6 +279,8 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Time:    time.Now(),
 					Type:    "analysis",
 				})
+				// 将助手的回复添加到分析器的对话历史中
+				m.analyzer.AddAssistantMessage(m.streamingMsg)
 				m.streamingMsg = ""
 			}
 			if m.isFirst {

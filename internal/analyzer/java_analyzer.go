@@ -15,8 +15,9 @@ import (
 
 // JavaAnalyzer Java启动分析器
 type JavaAnalyzer struct {
-	config *Config
-	agent  *react.Agent
+	config   *Config
+	agent    *react.Agent
+	messages []*schema.Message // 维护对话历史
 }
 
 // NewJavaAnalyzer 创建新的Java分析器
@@ -50,62 +51,101 @@ func NewJavaAnalyzer(config *Config) (*JavaAnalyzer, error) {
 }
 
 func (ja *JavaAnalyzer) Chat(ctx context.Context, input map[string]any) (*schema.Message, error) {
-	// Convert input map to messages
-	var messages []*schema.Message
+	// 添加新的用户消息到对话历史
+	var userMessage *schema.Message
 
 	// Add user message with file path instead of log content
 	if logPath, ok := input["log_path"].(string); ok {
-		userMessage := &schema.Message{
+		userMessage = &schema.Message{
 			Role:    schema.User,
 			Content: fmt.Sprintf("请分析这个Java应用日志文件: %s", logPath),
 		}
-		messages = append(messages, userMessage)
+	} else if userInput, ok := input["input"].(string); ok {
+		// 处理用户输入（继续聊天）
+		userMessage = &schema.Message{
+			Role:    schema.User,
+			Content: userInput,
+		}
 	} else if _, ok := input["log_content"].(string); ok {
 		// 如果提供了日志内容，指导用户使用文件路径
-		userMessage := &schema.Message{
+		userMessage = &schema.Message{
 			Role:    schema.User,
 			Content: "请提供日志文件的路径，我将使用工具来读取和分析日志内容。",
 		}
-		messages = append(messages, userMessage)
 	} else {
-		userMessage := &schema.Message{
+		userMessage = &schema.Message{
 			Role:    schema.User,
 			Content: "请提供Java应用日志文件的路径进行分析。",
 		}
-		messages = append(messages, userMessage)
 	}
 
-	return ja.agent.Generate(ctx, messages)
+	// 将用户消息添加到对话历史
+	ja.messages = append(ja.messages, userMessage)
+
+	// 使用完整的对话历史调用 agent
+	response, err := ja.agent.Generate(ctx, ja.messages)
+	if err != nil {
+		return nil, err
+	}
+
+	// 将助手的回复也添加到对话历史
+	ja.messages = append(ja.messages, response)
+
+	return response, nil
 }
 
 // ChatStream 流式聊天方法
 func (ja *JavaAnalyzer) ChatStream(ctx context.Context, input map[string]any) (*schema.StreamReader[*schema.Message], error) {
-	// Convert input map to messages
-	var messages []*schema.Message
+	// 添加新的用户消息到对话历史
+	var userMessage *schema.Message
 
 	// Add user message with file path instead of log content
 	if logPath, ok := input["log_path"].(string); ok {
-		userMessage := &schema.Message{
+		userMessage = &schema.Message{
 			Role:    schema.User,
 			Content: fmt.Sprintf("请分析这个Java应用日志文件: %s", logPath),
 		}
-		messages = append(messages, userMessage)
+	} else if userInput, ok := input["input"].(string); ok {
+		// 处理用户输入（继续聊天）
+		userMessage = &schema.Message{
+			Role:    schema.User,
+			Content: userInput,
+		}
 	} else if _, ok := input["log_content"].(string); ok {
 		// 如果提供了日志内容，指导用户使用文件路径
-		userMessage := &schema.Message{
+		userMessage = &schema.Message{
 			Role:    schema.User,
 			Content: "请提供日志文件的路径，我将使用工具来读取和分析日志内容。",
 		}
-		messages = append(messages, userMessage)
 	} else {
-		userMessage := &schema.Message{
+		userMessage = &schema.Message{
 			Role:    schema.User,
 			Content: "请提供Java应用日志文件的路径进行分析。",
 		}
-		messages = append(messages, userMessage)
 	}
 
-	return ja.agent.Stream(ctx, messages)
+	// 将用户消息添加到对话历史
+	ja.messages = append(ja.messages, userMessage)
+
+	// 使用完整的对话历史调用 agent
+	streamReader, err := ja.agent.Stream(ctx, ja.messages)
+	if err != nil {
+		return nil, err
+	}
+
+	// 注意：流式响应中，我们需要在流式处理完成后将助手的回复添加到对话历史
+	// 这需要在 UI 层处理流式响应时完成
+
+	return streamReader, nil
+}
+
+// AddAssistantMessage 将助手的回复添加到对话历史（用于流式响应完成后）
+func (ja *JavaAnalyzer) AddAssistantMessage(content string) {
+	assistantMessage := &schema.Message{
+		Role:    schema.Assistant,
+		Content: content,
+	}
+	ja.messages = append(ja.messages, assistantMessage)
 }
 
 // createAnalysisAgent 创建分析代理
