@@ -6,12 +6,16 @@ config.yaml
 # 构建产物
 java-analyzer
 java-analyzer-*
+java-startup-analyzer
 build/
 dist/
 
 # 调试文件
 __debug_bin*
 *.log
+
+# 验证报告
+build-verification-report.txt
 
 # IDE 文件
 # .vscode/

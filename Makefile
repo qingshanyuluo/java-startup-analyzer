@@ -29,15 +29,35 @@ build: ## 构建二进制文件
 build-all: ## 构建多平台版本
 	@echo "🔨 构建多平台版本..."
 	@mkdir -p $(BUILD_DIR)
-	@echo "构建 Linux AMD64..."
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 main.go
+	@echo "构建 Linux AMD64 (x86_64)..."
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 main.go
+	@echo "⚠️  跳过 Linux 386 构建 (依赖库不支持 32 位架构)"
 	@echo "构建 Darwin AMD64..."
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 main.go
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 main.go
 	@echo "构建 Darwin ARM64..."
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 main.go
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 main.go
 	@echo "构建 Windows AMD64..."
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe main.go
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe main.go
+	@echo "⚠️  跳过 Windows 386 构建 (依赖库不支持 32 位架构)"
 	@echo "✅ 多平台构建完成"
+
+# 构建 Linux 4.x 内核兼容版本
+build-linux4x: ## 构建 Linux 4.x 内核兼容版本
+	@echo "🔨 构建 Linux 4.x 内核兼容版本..."
+	@mkdir -p $(BUILD_DIR)
+	@echo "构建 Linux AMD64 (兼容内核 4.x)..."
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags netgo -ldflags="-w -s -extldflags '-static'" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64-kernel4x main.go
+	@echo "⚠️  跳过 Linux 386 构建 (依赖库不支持 32 位架构)"
+	@echo "✅ Linux 4.x 内核兼容版本构建完成"
+
+# 构建静态链接版本（适用于旧版 Linux）
+build-static: ## 构建静态链接版本
+	@echo "🔨 构建静态链接版本..."
+	@mkdir -p $(BUILD_DIR)
+	@echo "构建 Linux AMD64 静态版本..."
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s -extldflags '-static'" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64-static main.go
+	@echo "⚠️  跳过 Linux 386 静态版本构建 (依赖库不支持 32 位架构)"
+	@echo "✅ 静态链接版本构建完成"
 
 # 安装
 install: build ## 安装到系统
@@ -48,12 +68,12 @@ install: build ## 安装到系统
 # 测试
 test: ## 运行测试
 	@echo "🧪 运行测试..."
-	go test -v ./...
+	go test -v ./internal/... ./pkg/...
 
 # 测试覆盖率
 test-coverage: ## 运行测试并生成覆盖率报告
 	@echo "🧪 运行测试覆盖率..."
-	go test -v -coverprofile=coverage.out ./...
+	go test -v -coverprofile=coverage.out ./internal/... ./pkg/...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "✅ 覆盖率报告生成: coverage.html"
 
@@ -139,13 +159,20 @@ dev: ## 开发模式（自动重新构建）
 	fi
 
 # 发布准备
-release: clean test build-all ## 准备发布版本
+release: clean test build-all build-linux4x build-static ## 准备发布版本
 	@echo "📦 准备发布版本..."
 	@mkdir -p $(BUILD_DIR)/release
 	@cp $(BUILD_DIR)/$(BINARY_NAME)-* $(BUILD_DIR)/release/
 	@cp README.md USAGE.md $(BUILD_DIR)/release/
-	@cp .java-analyzer.yaml $(BUILD_DIR)/release/
+	@cp config.yaml.example $(BUILD_DIR)/release/ 2>/dev/null || true
 	@echo "✅ 发布版本准备完成: $(BUILD_DIR)/release/"
+	@echo "📁 包含的构建产物:"
+	@ls -la $(BUILD_DIR)/release/$(BINARY_NAME)-*
+
+# 验证构建产物
+verify: build-all build-linux4x build-static ## 验证构建产物
+	@echo "🔍 验证构建产物..."
+	@./verify-build.sh
 
 # 显示版本信息
 version: ## 显示版本信息
