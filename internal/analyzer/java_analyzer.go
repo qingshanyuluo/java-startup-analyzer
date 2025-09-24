@@ -32,12 +32,6 @@ func NewJavaAnalyzer(config *Config) (*JavaAnalyzer, error) {
 		return nil, fmt.Errorf("创建LLM客户端失败: %w", err)
 	}
 
-	// 绑定工具到LLM模型（ReAct Agent 需要模型支持工具调用）
-	analyzerTools := tools.GetAnalyzerTools()
-	if err := llmClient.BindTools(analyzerTools); err != nil {
-		return nil, fmt.Errorf("绑定工具失败: %w", err)
-	}
-
 	// 创建分析代理
 	agent, err := createAnalysisAgent(llmClient)
 	if err != nil {
@@ -250,8 +244,8 @@ const systemPrompt = `你是一个专业的Java应用程序启动问题诊断专
 
 // createAnalysisAgent 创建分析代理
 func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
-	// 创建代理配置
-	config := &react.AgentConfig{
+	// 直接创建代理，参考 react.go 例子的结构
+	reactAgent, err := react.NewAgent(context.Background(), &react.AgentConfig{
 		ToolCallingModel: llmClient.GetChatModel().(model.ToolCallingChatModel),
 		ToolsConfig: compose.ToolsNodeConfig{
 			Tools: []tool.BaseTool{
@@ -259,10 +253,7 @@ func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
 				tools.SearchFileContentTool,
 			},
 		},
-	}
-
-	// 创建代理
-	reactAgent, err := react.NewAgent(context.Background(), config)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("创建ReAct代理失败: %w", err)
 	}

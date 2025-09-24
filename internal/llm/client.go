@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
 )
 
 // Client LLM客户端
@@ -48,11 +47,6 @@ func NewClient(modelType, modelName, apiKey, baseURL string) (*Client, error) {
 // GetChatModel 获取聊天模型
 func (c *Client) GetChatModel() model.ChatModel {
 	return c.model
-}
-
-// BindTools 绑定工具到模型
-func (c *Client) BindTools(tools []*schema.ToolInfo) error {
-	return c.model.BindTools(tools)
 }
 
 // createOpenAIModel 创建OpenAI模型
