@@ -96,14 +96,22 @@ java.net.BindException: Address already in use: bind
 			"log_path": testCase.filePath,
 		}
 
-		// 执行分析
-		response, err := javaAnalyzer.Chat(ctx, input)
+		// 执行流式分析
+		stream, err := javaAnalyzer.ChatStream(ctx, input)
 		if err != nil {
 			log.Printf("分析失败: %v", err)
 			continue
 		}
+		defer stream.Close()
 
-		fmt.Println(response.Content)
+		fmt.Println("分析结果:")
+		for {
+			chunk, err := stream.Recv()
+			if err != nil {
+				break
+			}
+			fmt.Print(chunk.Content)
+		}
 		fmt.Println("\n" + strings.Repeat("=", 50))
 	}
 

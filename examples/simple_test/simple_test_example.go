@@ -74,12 +74,20 @@ java.lang.OutOfMemoryError: Java heap space
 	}
 
 	ctx := context.Background()
-	response1, err := javaAnalyzer.Chat(ctx, input1)
+	stream1, err := javaAnalyzer.ChatStream(ctx, input1)
 	if err != nil {
 		log.Printf("分析失败: %v", err)
 	} else {
+		defer stream1.Close()
 		fmt.Println("分析结果:")
-		fmt.Println(response1.Content)
+		for {
+			chunk, err := stream1.Recv()
+			if err != nil {
+				break
+			}
+			fmt.Print(chunk.Content)
+		}
+		fmt.Println()
 	}
 
 	// 测试2: 使用旧的log_content参数（应该提示使用文件路径）
@@ -88,12 +96,20 @@ java.lang.OutOfMemoryError: Java heap space
 		"log_content": "一些日志内容",
 	}
 
-	response2, err := javaAnalyzer.Chat(ctx, input2)
+	stream2, err := javaAnalyzer.ChatStream(ctx, input2)
 	if err != nil {
 		log.Printf("分析失败: %v", err)
 	} else {
+		defer stream2.Close()
 		fmt.Println("响应:")
-		fmt.Println(response2.Content)
+		for {
+			chunk, err := stream2.Recv()
+			if err != nil {
+				break
+			}
+			fmt.Print(chunk.Content)
+		}
+		fmt.Println()
 	}
 
 	// 测试3: 流式分析

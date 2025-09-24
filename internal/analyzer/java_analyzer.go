@@ -44,58 +44,6 @@ func NewJavaAnalyzer(config *Config) (*JavaAnalyzer, error) {
 	}, nil
 }
 
-func (ja *JavaAnalyzer) Chat(ctx context.Context, input map[string]any) (*schema.Message, error) {
-	// 添加新的用户消息到对话历史
-	var userMessage *schema.Message
-
-	// Add user message with file path instead of log content
-	if logPath, ok := input["log_path"].(string); ok {
-		userMessage = &schema.Message{
-			Role:    schema.User,
-			Content: fmt.Sprintf("请分析这个Java应用日志文件: %s", logPath),
-		}
-	} else if userInput, ok := input["input"].(string); ok {
-		// 处理用户输入（继续聊天）
-		userMessage = &schema.Message{
-			Role:    schema.User,
-			Content: userInput,
-		}
-	} else if _, ok := input["log_content"].(string); ok {
-		// 如果提供了日志内容，指导用户使用文件路径
-		userMessage = &schema.Message{
-			Role:    schema.User,
-			Content: "请提供日志文件的路径，我将使用工具来读取和分析日志内容。",
-		}
-	} else {
-		userMessage = &schema.Message{
-			Role:    schema.User,
-			Content: "请提供Java应用日志文件的路径进行分析。",
-		}
-	}
-
-	// 将用户消息添加到对话历史
-	ja.messages = append(ja.messages, userMessage)
-
-	// 创建包含系统消息的完整消息列表
-	messagesWithSystem := make([]*schema.Message, 0, len(ja.messages)+1)
-	messagesWithSystem = append(messagesWithSystem, &schema.Message{
-		Role:    schema.System,
-		Content: systemPrompt,
-	})
-	messagesWithSystem = append(messagesWithSystem, ja.messages...)
-
-	// 使用完整的对话历史调用 agent
-	response, err := ja.agent.Generate(ctx, messagesWithSystem)
-	if err != nil {
-		return nil, err
-	}
-
-	// 将助手的回复也添加到对话历史
-	ja.messages = append(ja.messages, response)
-
-	return response, nil
-}
-
 // ChatStream 流式聊天方法
 func (ja *JavaAnalyzer) ChatStream(ctx context.Context, input map[string]any) (*schema.StreamReader[*schema.Message], error) {
 	// 添加新的用户消息到对话历史
