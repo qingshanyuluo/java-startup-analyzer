@@ -15,6 +15,7 @@ type Config struct {
 	Verbose   bool   // 详细输出模式
 	StartCmd  string // 启动命令 (必需)
 	LogPath   string // 日志文件路径 (必需)
+	LogDir    string // 分析器日志目录 (可选，默认为 ./logs)
 	GitRepo   string // Git仓库路径 (可选)
 }
 
@@ -24,6 +25,7 @@ func DefaultConfig() *Config {
 		Model:     "openai",
 		ModelName: "gpt-3.5-turbo",
 		Verbose:   false,
+		LogDir:    "./logs", // 默认日志目录
 	}
 }
 

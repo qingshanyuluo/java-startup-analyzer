@@ -254,6 +254,17 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Time:    time.Now(),
 				Type:    "error",
 			})
+		} else {
+			// 显示日志文件路径信息
+			logPath := m.analyzer.GetLogPath()
+			if logPath != "" {
+				m.messages = append(m.messages, Message{
+					Content: fmt.Sprintf("📋 详细分析日志已保存到: %s\n\n现在您可以开始聊天了。", logPath),
+					Sender:  "bot",
+					Time:    time.Now(),
+					Type:    "text",
+				})
+			}
 		}
 		m.viewport.SetContent(m.renderMessages())
 		m.viewport.GotoBottom()
@@ -278,8 +289,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Time:    time.Now(),
 					Type:    "analysis",
 				})
-				// 将助手的回复添加到分析器的对话历史中
-				m.analyzer.AddAssistantMessage(m.streamingMsg)
+				// MessageModifier 会自动管理对话历史，无需手动添加
 				m.streamingMsg = ""
 			}
 			// 移除第一次分析完成后的额外消息

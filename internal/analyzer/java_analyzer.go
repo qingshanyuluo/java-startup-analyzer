@@ -7,6 +7,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/flow/agent"
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 	"github.com/user/java-startup-analyzer/internal/llm"
@@ -17,7 +18,33 @@ import (
 type JavaAnalyzer struct {
 	config   *Config
 	agent    *react.Agent
-	messages []*schema.Message // 维护对话历史
+	callback *JavaAnalyzerCallback
+}
+
+// modifyJavaAnalyzerMessages MessageModifier 函数，用于管理历史记录和消息长度限制
+func modifyJavaAnalyzerMessages(ctx context.Context, input []*schema.Message) []*schema.Message {
+	sum := 0
+	maxLimit := 50000 // 单个消息最大长度限制
+	maxMessages := 20 // 最大消息数量限制
+
+	// 如果消息数量超过限制，保留最新的消息
+	if len(input) > maxMessages {
+		input = input[len(input)-maxMessages:]
+	}
+
+	for i := range input {
+		if input[i] == nil {
+			continue
+		}
+		l := len(input[i].Content)
+		if l > maxLimit {
+			// 截取消息末尾部分，保留最新的内容
+			input[i].Content = input[i].Content[l-maxLimit:]
+		}
+		sum += len(input[i].Content)
+	}
+
+	return input
 }
 
 // NewJavaAnalyzer 创建新的Java分析器
@@ -32,24 +59,32 @@ func NewJavaAnalyzer(config *Config) (*JavaAnalyzer, error) {
 		return nil, fmt.Errorf("创建LLM客户端失败: %w", err)
 	}
 
-	// 创建分析代理
-	agent, err := createAnalysisAgent(llmClient)
+	// 创建回调处理器
+	callback, err := NewJavaAnalyzerCallback(config.LogDir)
 	if err != nil {
+		return nil, fmt.Errorf("创建回调处理器失败: %w", err)
+	}
+
+	// 创建分析代理
+	agent, err := createAnalysisAgent(llmClient, callback)
+	if err != nil {
+		callback.Close() // 清理资源
 		return nil, fmt.Errorf("创建分析代理失败: %w", err)
 	}
 
 	return &JavaAnalyzer{
-		config: config,
-		agent:  agent,
+		config:   config,
+		agent:    agent,
+		callback: callback,
 	}, nil
 }
 
 // ChatStream 流式聊天方法
 func (ja *JavaAnalyzer) ChatStream(ctx context.Context, input map[string]any) (*schema.StreamReader[*schema.Message], error) {
-	// 添加新的用户消息到对话历史
+	// 创建用户消息
 	var userMessage *schema.Message
 
-	// Add user message with file path instead of log content
+	// 根据输入类型创建相应的用户消息
 	if logPath, ok := input["log_path"].(string); ok {
 		userMessage = &schema.Message{
 			Role:    schema.User,
@@ -74,36 +109,40 @@ func (ja *JavaAnalyzer) ChatStream(ctx context.Context, input map[string]any) (*
 		}
 	}
 
-	// 将用户消息添加到对话历史
-	ja.messages = append(ja.messages, userMessage)
+	// 创建包含系统消息和用户消息的消息列表
+	// MessageModifier 会自动管理历史记录和消息长度
+	messages := []*schema.Message{
+		{
+			Role:    schema.System,
+			Content: systemPrompt,
+		},
+		userMessage,
+	}
 
-	// 创建包含系统消息的完整消息列表
-	messagesWithSystem := make([]*schema.Message, 0, len(ja.messages)+1)
-	messagesWithSystem = append(messagesWithSystem, &schema.Message{
-		Role:    schema.System,
-		Content: systemPrompt,
-	})
-	messagesWithSystem = append(messagesWithSystem, ja.messages...)
-
-	// 使用完整的对话历史调用 agent
-	streamReader, err := ja.agent.Stream(ctx, messagesWithSystem)
+	// 使用回调系统记录执行过程
+	streamReader, err := ja.agent.Stream(ctx, messages,
+		agent.WithComposeOptions(compose.WithCallbacks(ja.callback)))
 	if err != nil {
 		return nil, err
 	}
 
-	// 注意：流式响应中，我们需要在流式处理完成后将助手的回复添加到对话历史
-	// 这需要在 UI 层处理流式响应时完成
-
 	return streamReader, nil
 }
 
-// AddAssistantMessage 将助手的回复添加到对话历史（用于流式响应完成后）
-func (ja *JavaAnalyzer) AddAssistantMessage(content string) {
-	assistantMessage := &schema.Message{
-		Role:    schema.Assistant,
-		Content: content,
+// GetLogPath 获取当前会话的日志文件路径
+func (ja *JavaAnalyzer) GetLogPath() string {
+	if ja.callback != nil {
+		return ja.callback.GetLogPath()
 	}
-	ja.messages = append(ja.messages, assistantMessage)
+	return ""
+}
+
+// Close 关闭分析器并清理资源
+func (ja *JavaAnalyzer) Close() error {
+	if ja.callback != nil {
+		return ja.callback.Close()
+	}
+	return nil
 }
 
 // 系统提示模板
@@ -156,18 +195,18 @@ const systemPrompt = `你是一个专业的Java应用程序启动问题诊断专
   - path: 搜索目录路径（可选，默认为当前目录）
   - include: 文件过滤模式（可选，如"*.log", "*.java"）
 
-## 分析流程：
-1. 当用户提供日志文件路径时，立即使用read_file工具读取最后100行（必须至少查看100行）
-2. 分析日志中的错误信息、异常堆栈和警告
-3. 如果100行不够，根据分析结果决定是否需要读取更多内容（最多200行）
-4. 如果多次读取后仍未找到明确原因，使用search_file_content工具搜索相关错误模式
-5. 必须进行关键词搜索，包括但不限于：
+## 分析流程（必须执行多步分析）：
+1. **第一步**：使用read_file工具读取最后100行（必须至少查看100行）
+2. **第二步**：分析日志中的错误信息、异常堆栈和警告
+3. **第三步**：如果100行不够，根据分析结果决定是否需要读取更多内容（最多200行）
+4. **第四步**：**必须**使用search_file_content工具搜索相关错误模式，即使read_file已经找到了一些信息
+5. **第五步**：必须进行关键词搜索，包括但不限于：
    - "finish.*error" - 启动完成时的错误
    - "Exception" - 所有异常
    - "Error" - 所有错误
    - "failed.*to.*start" - 启动失败
    - "startup.*failed" - 启动失败
-6. 识别常见的Java启动问题，如：
+6. **第六步**：识别常见的Java启动问题，如：
    - OutOfMemoryError (内存不足)
    - ClassNotFoundException (类未找到)
    - NoSuchMethodError (方法未找到)
@@ -178,22 +217,26 @@ const systemPrompt = `你是一个专业的Java应用程序启动问题诊断专
    - 启动完成时的错误
    - 超时问题
    - 死锁问题
-7. 提供详细的诊断结果和具体的解决方案
+7. **第七步**：提供详细的诊断结果和具体的解决方案
+
+**重要**：你必须执行多步分析，不能仅通过一次read_file就得出结论。必须结合read_file和search_file_content两个工具的结果进行综合分析。
 
 ## 重要提醒：
 - 始终使用read_file工具来读取日志文件，不要要求用户直接提供日志内容
 - 必须至少查看最后100行，优先使用reverse=true读取最后100行，因为错误通常出现在日志末尾
 - 如果文件很大，分页读取而不是一次性读取全部内容（最多200行）
-- 当多次读取后仍未找到问题根源时，必须使用search_file_content工具进行深度搜索
+- **必须使用search_file_content工具进行深度搜索，这是分析流程的必需步骤**
 - 必须搜索"finish.*error"等关键词，进行全面分析
 - 搜索工具可以帮助找到分散在多个文件中的相关错误信息
 - 分析必须全面，不能遗漏任何可能的错误模式
-- 重点关注启动完成时的错误和启动失败的相关信息`
+- 重点关注启动完成时的错误和启动失败的相关信息
+- **不要仅通过一次工具调用就得出结论，必须进行多步分析**`
 
 // createAnalysisAgent 创建分析代理
-func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
+func createAnalysisAgent(llmClient *llm.Client, callback *JavaAnalyzerCallback) (*react.Agent, error) {
 	// 直接创建代理，参考 react.go 例子的结构
 	reactAgent, err := react.NewAgent(context.Background(), &react.AgentConfig{
+		MaxStep:          10, // 设置最大步数，允许多次工具调用
 		ToolCallingModel: llmClient.GetChatModel().(model.ToolCallingChatModel),
 		ToolsConfig: compose.ToolsNodeConfig{
 			Tools: []tool.BaseTool{
@@ -201,6 +244,7 @@ func createAnalysisAgent(llmClient *llm.Client) (*react.Agent, error) {
 				tools.SearchFileContentTool,
 			},
 		},
+		MessageModifier: modifyJavaAnalyzerMessages, // 添加消息修改器来管理历史记录
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建ReAct代理失败: %w", err)
